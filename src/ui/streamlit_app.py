@@ -18,7 +18,7 @@ from api.anthropic_client import AnthropicClient
 from api.api_manager import APIManager, RateLimitConfig, CacheConfig
 from extraction.term_extractor import TermExtractor
 from core.progress_tracker import ProgressTracker
-from io.format_exporter import FormatExporter
+from file_io.format_exporter import FormatExporter
 from utils.constants import ANTHROPIC_MODELS, SUPPORTED_LANGUAGES
 from utils.helpers import load_config
 
