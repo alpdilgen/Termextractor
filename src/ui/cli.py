@@ -7,13 +7,13 @@ from loguru import logger
 import os
 from typing import Optional
 
-from termextractor.api.anthropic_client import AnthropicClient
-from termextractor.api.api_manager import APIManager
-from termextractor.extraction.term_extractor import TermExtractor
-from termextractor.io.file_parser import FileParser
-from termextractor.io.format_exporter import FormatExporter
-from termextractor.core.progress_tracker import ProgressTracker
-from termextractor.utils.helpers import setup_logging, load_config
+from api.anthropic_client import AnthropicClient
+from api.api_manager import APIManager
+from extraction.term_extractor import TermExtractor
+from io.file_parser import FileParser
+from io.format_exporter import FormatExporter
+from core.progress_tracker import ProgressTracker
+from utils.helpers import setup_logging, load_config
 
 
 @click.group()
