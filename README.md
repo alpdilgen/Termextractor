@@ -47,7 +47,11 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
+# For full development:
 pip install -r requirements.txt
+
+# For Streamlit Cloud deployment (minimal):
+pip install -r requirements-streamlit.txt
 
 # Install in development mode
 pip install -e .
@@ -95,14 +99,33 @@ results.export_to_tbx("output.tbx")
 results.export_to_excel("output.xlsx")
 ```
 
-### Web Interface
+### Web Interface (Streamlit)
 
 ```bash
-# Start the web application
-termextractor serve --port 8000
+# Launch the Streamlit web app
+./run_streamlit.sh
 
-# Access at http://localhost:8000
+# Or on Windows
+run_streamlit.bat
+
+# Or directly
+streamlit run src/ui/streamlit_app.py
 ```
+
+The web interface will open automatically in your browser at `http://localhost:8501`
+
+**Features:**
+- 📤 File upload with drag & drop
+- ⚙️ Interactive configuration (model, languages, domain)
+- 📊 Real-time results with statistics
+- 💾 Multiple export formats (XLSX, CSV, TBX, JSON)
+- 📖 Built-in help and documentation
+- 💰 API usage and cost tracking
+
+See [STREAMLIT_GUIDE.md](STREAMLIT_GUIDE.md) for detailed instructions.
+
+**Deploy to Streamlit Cloud:**
+See [STREAMLIT_DEPLOY.md](STREAMLIT_DEPLOY.md) for deployment instructions.
 
 ## Configuration
 
