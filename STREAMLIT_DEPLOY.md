@@ -2,7 +2,7 @@
 
 ## Quick Deploy
 
-### Option 1: Using requirements-streamlit.txt (Recommended for Streamlit Cloud)
+### Option 1: Automatic Deployment (Recommended)
 
 1. **Fork/Push to GitHub**
    ```bash
@@ -18,37 +18,37 @@
 
 3. **Advanced Settings**
    - Click "Advanced settings"
+   - Python version: `3.11`
    - Add to "Secrets":
      ```toml
      ANTHROPIC_API_KEY = "your-api-key-here"
      ```
-   - Requirements file: `requirements-streamlit.txt`
-   - Python version: `3.11`
+   - Note: requirements.txt is used automatically (no selection needed)
 
 4. **Deploy**
    - Click "Deploy"
    - Wait for deployment (2-3 minutes)
 
-### Option 2: Using Full requirements.txt (Local/Server Deployment)
+### Option 2: Full Development Setup (Local Only)
 
-Use the full `requirements.txt` when deploying on your own server or running locally.
+Use `requirements-dev.txt` for local development with all features:
+
+```bash
+pip install -r requirements-dev.txt
+```
 
 ## Files for Streamlit Cloud
 
 The repository includes two requirement files:
 
-- **requirements-streamlit.txt** - Minimal dependencies for Streamlit Cloud (recommended)
-- **requirements.txt** - Full dependencies for local development
+- **requirements.txt** - Minimal dependencies for Streamlit Cloud (used automatically)
+- **requirements-dev.txt** - Full dependencies for local development with all features
 
 ## Troubleshooting Deployment Errors
 
 ### Error: "installer returned a non-zero exit code"
 
-**Solution 1:** Use `requirements-streamlit.txt`
-```toml
-# In Streamlit Cloud Advanced Settings
-Requirements file: requirements-streamlit.txt
-```
+**Solution 1:** Ensure `requirements.txt` contains minimal dependencies (already fixed in this repo)
 
 **Solution 2:** If still failing, create `.streamlit/config.toml` in repo:
 ```toml
@@ -118,8 +118,8 @@ Test with Streamlit Cloud requirements:
 python -m venv test_env
 source test_env/bin/activate
 
-# Install streamlit requirements
-pip install -r requirements-streamlit.txt
+# Install minimal requirements (same as Streamlit Cloud uses)
+pip install -r requirements.txt
 
 # Test locally
 streamlit run src/ui/streamlit_app.py
@@ -137,8 +137,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements-streamlit.txt .
-RUN pip install -r requirements-streamlit.txt
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
 COPY . .
 
@@ -174,7 +174,7 @@ git push heroku claude/advanced-terminology-extraction-011CURbVSmKpHuRd7VWVptKh:
 ### Railway Deployment
 
 1. Connect GitHub repository
-2. Set build command: `pip install -r requirements-streamlit.txt`
+2. Set build command: `pip install -r requirements.txt`
 3. Set start command: `streamlit run src/ui/streamlit_app.py`
 4. Add environment variable: `ANTHROPIC_API_KEY`
 
@@ -215,22 +215,22 @@ If deployment issues persist:
 
 ✅ Repository pushed to GitHub
 ✅ Branch: `claude/advanced-terminology-extraction-011CURbVSmKpHuRd7VWVptKh`
-✅ File exists: `requirements-streamlit.txt`
+✅ File exists: `requirements.txt` (minimal deps)
 ✅ File exists: `src/ui/streamlit_app.py`
-✅ File exists: `packages.txt` (for system deps)
+✅ File exists: `packages.txt` (empty - no system deps needed)
 ✅ API key set in Streamlit Secrets
-✅ Advanced settings configured
+✅ Python version set to 3.11
 ✅ Deploy clicked
 
 ## Example Streamlit Cloud Configuration
 
 ```toml
-# .streamlit/secrets.toml (in Streamlit Cloud UI)
+# Secrets (in Streamlit Cloud UI)
 ANTHROPIC_API_KEY = "sk-ant-api03-..."
 
 # Advanced Settings in UI
-Requirements file: requirements-streamlit.txt
 Python version: 3.11
+# Note: requirements.txt is automatically detected
 App URL: https://your-app-name.streamlit.app
 ```
 
