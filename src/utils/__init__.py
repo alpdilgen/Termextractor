@@ -1,7 +1,7 @@
 """Utility modules for TermExtractor."""
 
-from termextractor.utils.constants import *
-from termextractor.utils.helpers import *
+from .constants import *
+from .helpers import *
 
 __all__ = [
     "SUPPORTED_LANGUAGES",

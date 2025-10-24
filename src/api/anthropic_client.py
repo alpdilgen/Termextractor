@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from loguru import logger
 import time
 
-from termextractor.utils.constants import (
+from utils.constants import (
     ANTHROPIC_MODELS,
     DEFAULT_MODEL,
     API_TIMEOUT,

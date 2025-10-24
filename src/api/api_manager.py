@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from loguru import logger
 
-from termextractor.api.anthropic_client import AnthropicClient, APIResponse
-from termextractor.utils.helpers import hash_text
+from .anthropic_client import AnthropicClient, APIResponse
+from utils.helpers import hash_text
 
 
 @dataclass
