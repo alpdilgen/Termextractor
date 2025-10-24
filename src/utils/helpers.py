@@ -9,7 +9,7 @@ from datetime import datetime
 import logging
 from loguru import logger
 
-from termextractor.utils.constants import (
+from .constants import (
     SUPPORTED_LANGUAGES,
     ANTHROPIC_MODELS,
     FILE_FORMATS,
