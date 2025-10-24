@@ -15,7 +15,7 @@ from utils.constants import (
     TOKEN_LIMITS,
     COST_PER_1K_TOKENS,
 )
-from termextractor.utils.helpers import estimate_tokens, calculate_cost
+from utils.helpers import estimate_tokens, calculate_cost
 
 
 @dataclass
