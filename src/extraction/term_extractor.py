@@ -263,7 +263,7 @@ class TermExtractor:
         Returns:
             ExtractionResult
         """
-        from termextractor.io.file_parser import FileParser
+        from io.file_parser import FileParser
 
         logger.info(f"Extracting terms from file: {file_path}")
 
