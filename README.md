@@ -47,7 +47,11 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
+# For full development:
 pip install -r requirements.txt
+
+# For Streamlit Cloud deployment (minimal):
+pip install -r requirements-streamlit.txt
 
 # Install in development mode
 pip install -e .
@@ -119,6 +123,9 @@ The web interface will open automatically in your browser at `http://localhost:8
 - 💰 API usage and cost tracking
 
 See [STREAMLIT_GUIDE.md](STREAMLIT_GUIDE.md) for detailed instructions.
+
+**Deploy to Streamlit Cloud:**
+See [STREAMLIT_DEPLOY.md](STREAMLIT_DEPLOY.md) for deployment instructions.
 
 ## Configuration
 
