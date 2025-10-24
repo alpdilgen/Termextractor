@@ -184,7 +184,7 @@ class DomainClassifier:
             List of DomainResults
         """
         import asyncio
-        from termextractor.utils.helpers import chunk_list
+        from utils.helpers import chunk_list
 
         logger.info(f"Batch classifying {len(texts)} texts")
 
