@@ -214,7 +214,7 @@ def display_results(result: ExtractionResult, usage: Dict): # Type hint uses Ext
             "domain", "subdomain", "definition", "context", "frequency"
         ]
         df_display = df[[col for col in display_columns if col in df.columns]]
-        st.dataframe(df_display, width=None, height=400) # Use width=None for container width
+        st.dataframe(df_display, width='stretch', height=400) # Use 'stretch' for container width
 
         # --- Download Buttons ---
         st.markdown("### 💾 Download Results")
