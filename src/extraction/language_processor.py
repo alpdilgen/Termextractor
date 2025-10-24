@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
 from loguru import logger
 
-from termextractor.utils.constants import SUPPORTED_LANGUAGES, POS_TAGS
+from utils.constants import SUPPORTED_LANGUAGES, POS_TAGS
 
 
 @dataclass
