@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import base64
 from loguru import logger
@@ -95,7 +95,7 @@ class SecurityManager:
                 key_path.chmod(0o600)  # Read/write for owner only
             else:
                 # Derive key from master key
-                kdf = PBKDF2(
+                kdf = PBKDF2HMAC(
                     algorithm=hashes.SHA256(),
                     length=32,
                     salt=b"termextractor_salt",  # In production, use random salt
