@@ -4,9 +4,9 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 from loguru import logger
 
-from termextractor.api.api_manager import APIManager
-from termextractor.utils.constants import DOMAIN_CATEGORIES
-from termextractor.utils.helpers import parse_domain_path
+from api.api_manager import APIManager
+from utils.constants import DOMAIN_CATEGORIES
+from utils.helpers import parse_domain_path
 
 
 @dataclass
