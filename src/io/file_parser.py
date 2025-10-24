@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from loguru import logger
 
-from termextractor.utils.helpers import get_file_extension
+from utils.helpers import get_file_extension
 
 
 class FileParser:
