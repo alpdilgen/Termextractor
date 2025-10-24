@@ -1,6 +1,6 @@
 """Utility modules for TermExtractor."""
 
-from termextractor.utils.constants import *
+from .constants import *
 from termextractor.utils.helpers import *
 
 __all__ = [
