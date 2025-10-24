@@ -1,6 +1,6 @@
 """Core infrastructure modules for TermExtractor."""
 
-from .core.async_processing_manager import AsyncProcessingManager
+from .async_processing_manager import AsyncProcessingManager
 from .core.security_manager import SecurityManager
 from .core.error_handling_service import ErrorHandlingService
 from .core.progress_tracker import ProgressTracker
