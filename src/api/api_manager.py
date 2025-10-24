@@ -11,7 +11,7 @@ from pathlib import Path
 from loguru import logger
 
 from .anthropic_client import AnthropicClient, APIResponse
-from termextractor.utils.helpers import hash_text
+from utils.helpers import hash_text
 
 
 @dataclass
