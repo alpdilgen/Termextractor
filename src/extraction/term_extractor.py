@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from loguru import logger
 
-from .api.api_manager import APIManager
+from api.api_manager import APIManager
 from .extraction.domain_classifier import DomainClassifier
 from .extraction.language_processor import LanguageProcessor
 from .core.progress_tracker import ProgressTracker
