@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from loguru import logger
 
-from termextractor.api.api_manager import APIManager
-from termextractor.extraction.domain_classifier import DomainClassifier
-from termextractor.extraction.language_processor import LanguageProcessor
-from termextractor.core.progress_tracker import ProgressTracker
-from termextractor.utils.helpers import chunk_list
+from .api.api_manager import APIManager
+from .extraction.domain_classifier import DomainClassifier
+from .extraction.language_processor import LanguageProcessor
+from .core.progress_tracker import ProgressTracker
+from .utils.helpers import chunk_list
 
 
 @dataclass
