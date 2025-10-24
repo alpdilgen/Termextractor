@@ -7,14 +7,20 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 import os
+import sys
 
-from termextractor.api.anthropic_client import AnthropicClient
-from termextractor.api.api_manager import APIManager, RateLimitConfig, CacheConfig
-from termextractor.extraction.term_extractor import TermExtractor
-from termextractor.core.progress_tracker import ProgressTracker
-from termextractor.io.format_exporter import FormatExporter
-from termextractor.utils.constants import ANTHROPIC_MODELS, SUPPORTED_LANGUAGES
-from termextractor.utils.helpers import load_config
+# Add src directory to Python path for Streamlit Cloud
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+from api.anthropic_client import AnthropicClient
+from api.api_manager import APIManager, RateLimitConfig, CacheConfig
+from extraction.term_extractor import TermExtractor
+from core.progress_tracker import ProgressTracker
+from io.format_exporter import FormatExporter
+from utils.constants import ANTHROPIC_MODELS, SUPPORTED_LANGUAGES
+from utils.helpers import load_config
 
 # Page configuration
 st.set_page_config(
