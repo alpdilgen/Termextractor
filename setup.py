@@ -88,12 +88,12 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "termextractor=termextractor.ui.cli:main",
+            "termextractor=ui.cli:main",
         ],
     },
     include_package_data=True,
     package_data={
-        "termextractor": [
+        "core": [
             "config/*.yaml",
             "data/*.json",
         ],
