@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 from loguru import logger
 
-from termextractor.extraction.term_extractor import ExtractionResult, Term
+from extraction.term_extractor import ExtractionResult, Term
 
 
 class FormatExporter:
