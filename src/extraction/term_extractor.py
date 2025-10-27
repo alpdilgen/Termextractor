@@ -426,4 +426,78 @@ class TermExtractor:
          if show_progress and self.progress_tracker:
              self.progress_tracker.complete_task(task_id)
 
-         logger.info(f"Batch extraction finished. Process
+         logger.info(f"Batch extraction finished. Processed {len(results)} results.")
+         return results
+
+
+    async def merge_results(
+        self, results: List[ExtractionResult], deduplicate: bool = True
+    ) -> ExtractionResult:
+        """Merge multiple extraction results, recalculate stats, and deduplicate."""
+        if not results:
+            logger.warning("Merge_results called with empty list.")
+            return ExtractionResult(terms=[])
+
+        all_terms: List[Term] = []
+        merged_metadata = {"merged_from": len(results), "deduplicated": deduplicate, "errors": [], "warnings": []}
+        base_result = results[0]
+        final_domain_hierarchy = base_result.domain_hierarchy
+
+        domain_counts = {}
+        for i, result in enumerate(results):
+             if isinstance(result, ExtractionResult):
+                  all_terms.extend(result.terms)
+                  if "error" in result.metadata: merged_metadata["errors"].append(f"Chunk/Item {i+1}: {result.metadata['error']}")
+                  if "warning" in result.metadata: merged_metadata["warnings"].append(f"Chunk/Item {i+1}: {result.metadata['warning']}")
+                  if result.domain_hierarchy and tuple(result.domain_hierarchy) != ("General",):
+                       domain_key = tuple(result.domain_hierarchy)
+                       domain_counts[domain_key] = domain_counts.get(domain_key, 0) + 1
+             else:
+                  logger.warning(f"Item {i} in results list is not an ExtractionResult: {type(result)}")
+                  merged_metadata["errors"].append(f"Result {i}: Invalid type {type(result)}")
+        
+        if domain_counts:
+             final_domain_hierarchy = list(max(domain_counts, key=domain_counts.get))
+        elif not final_domain_hierarchy or final_domain_hierarchy == ["General"]:
+             final_domain_hierarchy = ["General"]
+
+
+        final_terms = all_terms
+        deduplication_map: Dict[tuple, Term] = {}
+
+        if deduplicate:
+            logger.info(f"Deduplicating {len(all_terms)} total terms...")
+            for term in all_terms:
+                key = (term.term.lower(), term.translation.lower() if term.translation else None, term.pos)
+                
+                if key not in deduplication_map:
+                    deduplication_map[key] = term
+                else:
+                    existing_term = deduplication_map[key]
+                    existing_term.frequency += term.frequency
+                    existing_term.relevance_score = max(existing_term.relevance_score, term.relevance_score)
+                    existing_term.confidence_score = max(existing_term.confidence_score, term.confidence_score)
+                    existing_term.variants = list(set(existing_term.variants + term.variants))
+                    existing_term.related_terms = list(set(existing_term.related_terms + term.related_terms))
+                    if term.relevance_score > existing_term.relevance_score:
+                         existing_term.definition = term.definition
+                         existing_term.context = term.context
+                         existing_term.domain = term.domain
+                         existing_term.subdomain = term.subdomain
+
+            final_terms = list(deduplication_map.values())
+            logger.info(f"Merged into {len(final_terms)} unique terms.")
+        else:
+            logger.info(f"Merged {len(all_terms)} terms without deduplication.")
+
+        merged_result = ExtractionResult(
+            terms=final_terms,
+            domain_hierarchy=final_domain_hierarchy,
+            language_pair=base_result.language_pair,
+            source_language=base_result.source_language,
+            target_language=base_result.target_language,
+            metadata=merged_metadata,
+        )
+        merged_result.statistics = merged_result._calculate_statistics(final_terms)
+
+        return merged_result
