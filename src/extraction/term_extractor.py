@@ -3,6 +3,7 @@
 """Main terminology extraction module."""
 
 import asyncio
+import re # <-- HATA DÜZELTMESİ: 're' modülü buraya eklendi
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,17 +14,15 @@ from api.api_manager import APIManager
 from .domain_classifier import DomainClassifier, DomainResult
 from .language_processor import LanguageProcessor
 from core.progress_tracker import ProgressTracker
-from utils.helpers import chunk_list, parse_domain_path # chunk_list'i metin parçalama için kullanacağız
+from utils.helpers import chunk_list, parse_domain_path
 from file_io.file_parser import FileParser
 
 # Import data models from the new file
 from .data_models import Term, ExtractionResult
 
 
-# --- YENİ EKLENEN SABİT ---
-# Metni bölmek için karakter boyutu.
-# 5000 çok büyüktü ve AI'nın JSON hatası yapmasına neden oldu.
-# Daha güvenli bir yanıt almak için 2000'e düşürüyoruz.
+# --- METİN PARÇALAMA LİMİTİ ---
+# AI'nın JSON hatası vermemesi için daha küçük parçalar kullanıyoruz.
 TEXT_CHUNK_SIZE = 2000 # Karakter cinsinden
 
 
@@ -44,11 +43,9 @@ class TermExtractor:
              raise TypeError("api_client must be an instance of APIManager")
 
         self.api_client = api_client
-        # Lazy initialization or pass dependencies correctly
         self.domain_classifier = domain_classifier
-        self.language_processor = language_processor or LanguageProcessor() # Default if None
-        self.progress_tracker = progress_tracker or ProgressTracker() # Default if None
-        # Ensure threshold is a float
+        self.language_processor = language_processor or LanguageProcessor()
+        self.progress_tracker = progress_tracker or ProgressTracker()
         self.default_relevance_threshold = float(default_relevance_threshold)
         logger.info(f"TermExtractor initialized with default threshold {self.default_relevance_threshold}")
 
@@ -174,7 +171,7 @@ class TermExtractor:
     ) -> ExtractionResult:
         """
         Extract terms from a file.
-        MODIFIED: Handles chunking for large files.
+        Handles parsing and chunking for large files.
         """
         logger.info(f"Starting file extraction process for: {file_path}")
         file_path = Path(file_path)
@@ -214,31 +211,34 @@ class TermExtractor:
                                      metadata=error_metadata)
 
         # --- CHUNKING LOGIC ---
-        # Use character-based chunking
+        # Nested function for smart chunking
         def split_text_into_chunks(text, chunk_size):
+            """Splits text into chunks, respecting paragraph boundaries where possible."""
             chunks = []
             current_chunk = ""
-            # Split by double newline (paragraphs) first
-            paragraphs = re.split(r'(\n\s*\n)', text) # Keep separators
+            # Split by double newline (paragraphs), keeping the separator
+            paragraphs = re.split(r'(\n\s*\n)', text)
             
             for i in range(0, len(paragraphs), 2): # Iterate over text + separator
                 paragraph = paragraphs[i]
                 separator = paragraphs[i+1] if i+1 < len(paragraphs) else ""
                 
+                if not paragraph: # Skip empty paragraphs
+                     if separator: current_chunk += separator
+                     continue
+
                 # If adding the next paragraph fits, add it
                 if len(current_chunk) + len(paragraph) + len(separator) <= chunk_size:
                     current_chunk += paragraph + separator
                 # If the paragraph *itself* is too large, split it
                 elif len(paragraph) > chunk_size:
-                    # If we have something, save it first
-                    if current_chunk.strip():
+                    if current_chunk.strip(): # Save what we have
                         chunks.append(current_chunk.strip())
-                    current_chunk = ""
                     # Force-split the large paragraph
                     for j in range(0, len(paragraph), chunk_size):
                          chunks.append(paragraph[j:j+chunk_size])
-                    current_chunk += separator # Add separator to next (empty) chunk
-                # Otherwise, the paragraph doesn't fit, so save the current chunk and start a new one
+                    current_chunk = separator # Start new chunk with separator
+                # Otherwise, the paragraph doesn't fit, save current chunk and start new
                 else:
                     if current_chunk.strip():
                          chunks.append(current_chunk.strip())
@@ -253,7 +253,6 @@ class TermExtractor:
 
         if len(text_content) <= TEXT_CHUNK_SIZE:
             logger.info("Text is small enough, processing as single chunk.")
-            # Still apply thresholding at the end
             result = await self.extract_from_text(
                 text=text_content,
                 source_lang=source_lang,
@@ -261,7 +260,7 @@ class TermExtractor:
                 domain_path=domain_path,
                 relevance_threshold=-1, # Don't filter yet
             )
-            # Now apply filter
+            # Apply filter now
             threshold_to_apply = relevance_threshold if relevance_threshold is not None else self.default_relevance_threshold
             if threshold_to_apply >= 0:
                  final_result = result.filter_by_relevance(threshold_to_apply)
@@ -273,7 +272,7 @@ class TermExtractor:
                  logger.info(f"Returning {len(result.terms)} terms (no threshold filter).")
                  return result
         else:
-            # Text is large, split into chunks respecting paragraphs
+            # Text is large, split into chunks
             logger.info(f"Text is large ({len(text_content)} chars), splitting into chunks...")
             chunks = split_text_into_chunks(text_content, TEXT_CHUNK_SIZE)
             logger.info(f"Processing {len(chunks)} chunks in parallel (using asyncio.gather).")
@@ -391,17 +390,18 @@ class TermExtractor:
              for text in batch_of_texts:
                  if text and text.strip():
                       # Each text item is processed as a "file" (which handles chunking)
+                      # Call extract_from_text directly, assuming items in 'texts' aren't huge
                       batch_tasks.append(
-                           self.extract_from_text( # Call extract_from_text directly
+                           self.extract_from_text(
                                 text=text,
                                 source_lang=source_lang,
                                 target_lang=target_lang,
                                 domain_path=domain_path,
-                                relevance_threshold=relevance_threshold # Pass threshold
+                                relevance_threshold=relevance_threshold
                            )
                       )
                  else:
-                      processed_count += 1 # Count empty texts as "processed"
+                      processed_count += 1
                       results.append(ExtractionResult(terms=[], metadata={"warning": "Empty text provided."}))
 
 
@@ -426,83 +426,4 @@ class TermExtractor:
          if show_progress and self.progress_tracker:
              self.progress_tracker.complete_task(task_id)
 
-         logger.info(f"Batch extraction finished. Processed {len(results)} results.")
-         return results
-
-
-    async def merge_results(
-        self, results: List[ExtractionResult], deduplicate: bool = True
-    ) -> ExtractionResult:
-        """Merge multiple extraction results, recalculate stats, and deduplicate."""
-        if not results:
-            logger.warning("Merge_results called with empty list.")
-            return ExtractionResult(terms=[])
-
-        all_terms: List[Term] = []
-        merged_metadata = {"merged_from": len(results), "deduplicated": deduplicate, "errors": [], "warnings": []}
-        base_result = results[0]
-        final_domain_hierarchy = base_result.domain_hierarchy
-
-        domain_counts = {}
-        for i, result in enumerate(results):
-             if isinstance(result, ExtractionResult):
-                  all_terms.extend(result.terms)
-                  if "error" in result.metadata: merged_metadata["errors"].append(f"Chunk/Item {i+1}: {result.metadata['error']}")
-                  if "warning" in result.metadata: merged_metadata["warnings"].append(f"Chunk/Item {i+1}: {result.metadata['warning']}")
-                  # Domain voting
-                  if result.domain_hierarchy and tuple(result.domain_hierarchy) != ("General",):
-                       domain_key = tuple(result.domain_hierarchy)
-                       domain_counts[domain_key] = domain_counts.get(domain_key, 0) + 1
-             else:
-                  logger.warning(f"Item {i} in results list is not an ExtractionResult: {type(result)}")
-                  merged_metadata["errors"].append(f"Result {i}: Invalid type {type(result)}")
-        
-        if domain_counts: # Find most common valid domain
-             final_domain_hierarchy = list(max(domain_counts, key=domain_counts.get))
-        elif not final_domain_hierarchy or final_domain_hierarchy == ["General"]: # Fallback if first was "General"
-             final_domain_hierarchy = ["General"]
-
-
-        final_terms = all_terms
-        deduplication_map: Dict[tuple, Term] = {}
-
-        if deduplicate:
-            logger.info(f"Deduplicating {len(all_terms)} total terms...")
-            for term in all_terms:
-                # Key for deduplication: lowercase term, translation, and POS
-                key = (term.term.lower(), term.translation.lower() if term.translation else None, term.pos)
-                
-                if key not in deduplication_map:
-                    deduplication_map[key] = term
-                else:
-                    # --- Merge Logic ---
-                    existing_term = deduplication_map[key]
-                    existing_term.frequency += term.frequency
-                    existing_term.relevance_score = max(existing_term.relevance_score, term.relevance_score)
-                    existing_term.confidence_score = max(existing_term.confidence_score, term.confidence_score)
-                    existing_term.variants = list(set(existing_term.variants + term.variants))
-                    existing_term.related_terms = list(set(existing_term.related_terms + term.related_terms))
-                    # Keep metadata from the term with the highest relevance
-                    if term.relevance_score > existing_term.relevance_score:
-                         existing_term.definition = term.definition
-                         existing_term.context = term.context
-                         existing_term.domain = term.domain
-                         existing_term.subdomain = term.subdomain
-
-            final_terms = list(deduplication_map.values())
-            logger.info(f"Merged into {len(final_terms)} unique terms.")
-        else:
-            logger.info(f"Merged {len(all_terms)} terms without deduplication.")
-
-        merged_result = ExtractionResult(
-            terms=final_terms,
-            domain_hierarchy=final_domain_hierarchy,
-            language_pair=base_result.language_pair,
-            source_language=base_result.source_language,
-            target_language=base_result.target_language,
-            metadata=merged_metadata,
-        )
-        # Recalculate stats on the final merged & deduplicated list
-        merged_result.statistics = merged_result._calculate_statistics(final_terms)
-
-        return merged_result
+         logger.info(f"Batch extraction finished. Process
