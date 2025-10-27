@@ -9,10 +9,9 @@ from dataclasses import dataclass, field
 from loguru import logger
 import time
 import json
-import re # Ensure re is imported
+import re
 
 # Corrected imports relative to src/
-# Ensure constants are loaded correctly
 try:
     from utils.constants import (
         ANTHROPIC_MODELS,
@@ -27,8 +26,8 @@ try:
 except ImportError:
     logger.error("Could not import constants or helpers from utils. Using fallback values.")
     constants_available = False
-    # Define minimal fallbacks if needed, though this indicates a bigger issue
-    ANTHROPIC_MODELS = ["claude-3-5-sonnet-20240620"] # Example fallback
+    # Define minimal fallbacks if needed
+    ANTHROPIC_MODELS = ["claude-3-5-sonnet-20240620"]
     DEFAULT_MODEL = ANTHROPIC_MODELS[0]
     API_TIMEOUT = 300
     MAX_RETRIES = 4
@@ -68,14 +67,14 @@ class AnthropicClient:
         self,
         api_key: str,
         model: str = DEFAULT_MODEL,
-        max_tokens: int = 4096, # Default max output tokens
+        # ***** FIXED: Increased max_tokens from 4096 to 8192 *****
+        max_tokens: int = 8192, # Default max output tokens
         temperature: float = 0.0, # Default temperature for deterministic output
         timeout: int = API_TIMEOUT,
     ):
         """Initialize Anthropic client."""
         if not api_key:
              raise ValueError("Anthropic API key is required.")
-        # Ensure model is valid, fallback to default if not found
         effective_model = model
         if model not in ANTHROPIC_MODELS:
             logger.warning(f"Model '{model}' not in known list {ANTHROPIC_MODELS}. Using default: {DEFAULT_MODEL}")
@@ -83,7 +82,7 @@ class AnthropicClient:
 
         self.api_key = api_key
         self.model = effective_model
-        self.max_tokens = max_tokens
+        self.max_tokens = max_tokens # This will now be 8192 by default
         self.temperature = temperature
         self.timeout = timeout
 
@@ -106,6 +105,7 @@ class AnthropicClient:
     ) -> APIResponse:
         """Generate text using Anthropic API (async wrapper)."""
         start_time = time.time()
+        # Use provided max_tokens, or the class default (which is now 8192)
         max_tokens_to_use = max_tokens or self.max_tokens
         temperature_to_use = temperature if temperature is not None else self.temperature
 
@@ -113,7 +113,7 @@ class AnthropicClient:
         estimated_input = estimate_tokens(prompt)
         if system_prompt:
             estimated_input += estimate_tokens(system_prompt)
-        logger.debug(f"Estimated input tokens: {estimated_input} for model {self.model}")
+        logger.debug(f"Estimated input tokens: {estimated_input} for model {self.model}. Max output: {max_tokens_to_use}")
 
         try:
             kwargs = {
@@ -131,12 +131,17 @@ class AnthropicClient:
             content = response.content[0].text if response.content else ""
             input_tokens = response.usage.input_tokens
             output_tokens = response.usage.output_tokens
-            # Ensure constants are available before calculating cost
+            
+            # Check if output was truncated
+            if response.stop_reason == 'max_tokens':
+                 logger.warning(f"API response was truncated! Output tokens hit the limit of {output_tokens}.")
+                 # We will still try to parse it, but it might fail
+
             cost = calculate_cost(input_tokens, output_tokens, self.model, COST_PER_1K_TOKENS) if constants_available else 0.0
             self._update_usage(input_tokens, output_tokens, cost)
             latency = time.time() - start_time
 
-            logger.info(f"API request completed: {input_tokens} in + {output_tokens} out tokens, ${cost:.4f}, {latency:.2f}s")
+            logger.info(f"API request completed: {input_tokens} in + {output_tokens} out tokens, ${cost:.4f}, {latency:.2f}s. Stop reason: {response.stop_reason}")
 
             return APIResponse(
                 content=content, model=self.model, input_tokens=input_tokens,
@@ -159,38 +164,41 @@ class AnthropicClient:
         context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Extract terminology from text using AI, returns parsed JSON or error dict."""
-        system_prompt = self._build_extraction_system_prompt() # Uses the MODIFIED prompt now
+        system_prompt = self._build_extraction_system_prompt()
         user_prompt = self._build_extraction_user_prompt(
             text, source_lang, target_lang, domain, context
         )
 
+        response: Optional[APIResponse] = None # Initialize response
         try:
-            response = await self.generate_text( # This makes the actual API call
+            response = await self.generate_text(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
             )
         except Exception as api_err:
              logger.error(f"API call failed during term extraction: {api_err}", exc_info=True)
-             # Return a dictionary indicating failure, including potential cost if available
              return {"terms": [], "error": f"API call failed: {api_err}", "_metadata": self.get_usage_stats()}
 
+        # We must have a response object here
+        if not response:
+             return {"terms": [], "error": "API call returned no response.", "_metadata": self.get_usage_stats()}
 
         logger.debug(f"Raw API response content received:\n{response.content}")
         logger.info(f"Raw API response content (first 500 chars): {response.content[:500]}...")
 
         try:
-            # Attempt to find JSON block if response contains extra text
             json_match = re.search(r'{.*}', response.content, re.DOTALL)
+            json_string: Optional[str] = None
             if json_match:
                 json_string = json_match.group(0)
-                result = json.loads(json_string)
             else:
-                 # Check if the content itself might be the JSON (without extra text)
-                 try:
-                      result = json.loads(response.content)
-                 except json.JSONDecodeError:
-                      # If direct parsing also fails, raise the original error logic
-                      raise json.JSONDecodeError("No valid JSON object found in the response.", response.content, 0)
+                 # Try to parse the whole string directly
+                 json_string = response.content
+
+            if not json_string:
+                 raise json.JSONDecodeError("No JSON object found in the response.", response.content, 0)
+                 
+            result = json.loads(json_string)
 
             parsed_term_count = len(result.get("terms", [])) if isinstance(result.get("terms"), list) else 0
             logger.info(f"Successfully parsed JSON response. Found {parsed_term_count} terms in 'terms' list.")
@@ -206,16 +214,16 @@ class AnthropicClient:
             logger.error(f"Problematic Response Content (first 500 chars): {response.content[:500]}...")
             return {
                 "terms": [], "raw_response": response.content, "error": f"Failed to parse API response: {e}",
-                 "_metadata": { # Include metadata even on parse failure
+                 "_metadata": {
                     "input_tokens": response.input_tokens, "output_tokens": response.output_tokens,
                     "cost": response.cost, "model": response.model, "latency_seconds": response.latency,
                  }
             }
-        except Exception as e: # Catch other potential errors during processing
+        except Exception as e:
              logger.error(f"Unexpected error processing API response: {e}", exc_info=True)
              return {
                   "terms": [], "error": f"Unexpected error processing response: {e}",
-                  "_metadata": { # Include metadata if available from response
+                  "_metadata": {
                       "input_tokens": getattr(response, 'input_tokens', 0),
                       "output_tokens": getattr(response, 'output_tokens', 0),
                       "cost": getattr(response, 'cost', 0.0), "model": getattr(response, 'model', self.model),
@@ -224,10 +232,8 @@ class AnthropicClient:
              }
 
     # --- Prompt Building Methods ---
-
-    # ***** MODIFIED SYSTEM PROMPT *****
     def _build_extraction_system_prompt(self) -> str:
-        """Build system prompt for term extraction, inspired by v8 and broadened scope."""
+        """Build system prompt for term extraction. (MODIFIED)"""
         return """You are an expert terminology extraction system specialized in identifying key terms, concepts, and domain-specific vocabulary from various texts. Your goal is to provide a comprehensive list suitable for creating glossaries or termbases.
 
 Analyze the provided text carefully based on the source language, target language (if specified), and domain hint (if provided). For each relevant item you extract, provide the following details:
@@ -238,15 +244,15 @@ Analyze the provided text carefully based on the source language, target languag
 5.  `pos`: The part of speech (e.g., NOUN, VERB, ADJ, PHRASE).
 6.  `definition`: A concise definition, explanation, or clarification of the term, especially within the context of the domain.
 7.  `context`: A short, representative snippet from the original text showing the term in use.
-8.  `relevance_score`: Your assessment (0-100) of how important and specific the term is to the text's core subject matter and domain. Prioritize terms that are central to understanding the text's specialized content. Include terms even if only moderately relevant if they seem distinct from common language.
+8.  `relevance_score`: Your assessment (0-100) of how important and specific the term is to the text's core subject matter and domain. Prioritize terms that are central to understanding the text's specialized content. Include items even if moderately relevant if they seem distinct from common language.
 9.  `confidence_score`: Your confidence (0-100) in the accuracy of the extracted information (term identification, translation, definition).
 10. `frequency`: How many times the exact term/phrase (case-insensitive recommended for counting) appears in the text.
 11. `is_compound`: Boolean, true if the source term is likely a compound word (especially relevant for languages like German).
 12. `is_abbreviation`: Boolean, true if the source term is an abbreviation or acronym.
 13. `variants`: A list of morphological or spelling variations found in the text (e.g., plurals, different capitalizations).
-14. `related_terms`: A list of semantically related terms also found in the text (synonyms, antonyms, hyponyms/hypernyms if identifiable).
+14. `related_terms`: A list of semantically related terms found in the text (synonyms, antonyms, hyponyms/hypernyms if identifiable).
 
-Your response MUST be ONLY a single, valid JSON object enclosed in curly braces `{}`. Do not include any text before or after the JSON object. Do not use markdown formatting like ```json. The JSON structure MUST be exactly as follows:
+Return your response ONLY as a single, valid JSON object enclosed in curly braces `{}`. Do not include any text before or after the JSON object. Do not use markdown formatting like ```json. The JSON structure MUST be exactly as follows:
 {
   "terms": [
     {
@@ -278,18 +284,16 @@ Your response MUST be ONLY a single, valid JSON object enclosed in curly braces 
 }
 
 Be thorough but discerning. Identify terms specific to the domain or subject matter, distinguishing them from general vocabulary. Aim for a balance between capturing important concepts (recall) and ensuring accuracy (precision). If the text is non-technical (like a children's story), extract vocabulary that might be key for that specific context or learning level, even if not strictly 'technical'. Calculate frequency based only on the provided text. Determine the domain hierarchy based on the overall text content."""
-    # ***** END OF MODIFIED SYSTEM PROMPT *****
 
     def _build_extraction_user_prompt(
         self,
         text: str,
         source_lang: str,
         target_lang: Optional[str] = None,
-        domain: Optional[str] = None, # Domain string (e.g., "Medical / Cardiology")
+        domain: Optional[str] = None,
         context: Optional[str] = None,
     ) -> str:
         """Build user prompt for term extraction."""
-        # This prompt seems reasonable, making only minor wording adjustments
         prompt_parts = [
             f"Extract key terms, concepts, entities, and specialized vocabulary from the following text.",
             f"Source Language: {source_lang}",
@@ -300,12 +304,10 @@ Be thorough but discerning. Identify terms specific to the domain or subject mat
         else: prompt_parts.append("Domain Hint: None provided. Determine domain from text if possible.")
         if context: prompt_parts.append(f"Additional Context: {context}")
 
-        # Basic truncation if text is extremely long (adjust limit as needed)
-        max_prompt_chars = 180000 # Increased limit slightly, still well within typical context windows
+        max_prompt_chars = 180000 # Increased limit
         text_to_send = text
         if len(text) > max_prompt_chars:
              logger.warning(f"Input text length ({len(text)}) exceeds limit ({max_prompt_chars}). Truncating.")
-             # Keep start and end for context
              keep_chars = max_prompt_chars // 2
              text_to_send = f"{text[:keep_chars]}\n\n[...TEXT TRUNCATED...]\n\n{text[-keep_chars:]}"
 
@@ -315,20 +317,16 @@ Be thorough but discerning. Identify terms specific to the domain or subject mat
         prompt_parts.append("\nPlease provide the extracted items strictly in the specified JSON format ONLY.")
         return "\n".join(prompt_parts)
 
-    # --- Domain Classification Method (Example) ---
+    # --- Domain Classification Method (Placeholder) ---
     async def classify_domain(
         self,
         text: str,
         suggested_domains: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Classify text into hierarchical domain categories using AI."""
-        # This still needs a robust implementation if automatic domain classification is desired
-        system_prompt = """You are an expert text classifier... Format output ONLY as JSON: { ... }""" # Truncated
-        user_prompt = f"Classify the domain hierarchy of the following text:\n\n{text[:5000]}..." # Limit text
+        # This needs a robust implementation if automatic domain classification is desired
         logger.warning("Domain classification called but using placeholder implementation.")
-        # Placeholder implementation
         return {"domain_hierarchy": ["General"], "confidence": 0, "reasoning": "Placeholder implementation"}
-
 
     # --- Usage Tracking Methods ---
     def _update_usage(self, input_tokens: int, output_tokens: int, cost: float) -> None:
