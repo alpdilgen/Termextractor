@@ -21,10 +21,10 @@ from .data_models import Term, ExtractionResult
 
 
 # --- YENİ EKLENEN SABİT ---
-# Metni bölmek için bir karakter boyutu belirleyelim.
-# 5000 karakter ~1250 token eder, bu da 8192'lik çıktı limitinin aşılmasını zorlaştırır.
-# Daha güvenli olmak için 4000-5000 arası iyidir.
-TEXT_CHUNK_SIZE = 5000 # Karakter cinsinden
+# Metni bölmek için karakter boyutu.
+# 5000 çok büyüktü ve AI'nın JSON hatası yapmasına neden oldu.
+# Daha güvenli bir yanıt almak için 2000'e düşürüyoruz.
+TEXT_CHUNK_SIZE = 2000 # Karakter cinsinden
 
 
 class TermExtractor:
@@ -44,9 +44,11 @@ class TermExtractor:
              raise TypeError("api_client must be an instance of APIManager")
 
         self.api_client = api_client
+        # Lazy initialization or pass dependencies correctly
         self.domain_classifier = domain_classifier
-        self.language_processor = language_processor or LanguageProcessor()
-        self.progress_tracker = progress_tracker or ProgressTracker()
+        self.language_processor = language_processor or LanguageProcessor() # Default if None
+        self.progress_tracker = progress_tracker or ProgressTracker() # Default if None
+        # Ensure threshold is a float
         self.default_relevance_threshold = float(default_relevance_threshold)
         logger.info(f"TermExtractor initialized with default threshold {self.default_relevance_threshold}")
 
@@ -62,7 +64,7 @@ class TermExtractor:
         """Extract terms from a single string of text (now assumes text is reasonably sized)."""
         logger.info(f"Extracting terms from text chunk ({len(text)} chars, {source_lang}->{target_lang or 'mono'})")
 
-        domain_hierarchy_list: List[str] = ["General"]
+        domain_hierarchy_list: List[str] = ["General"] # Default
         domain_to_pass_api: Optional[str] = None
 
         # --- Domain Determination ---
@@ -209,25 +211,71 @@ class TermExtractor:
         if not text_content.strip():
              logger.warning(f"File {file_path.name} contains no non-whitespace text. Returning 0 terms.")
              return ExtractionResult(terms=[], source_language=source_lang, target_language=target_lang,
-                                     metadata=error_metadata) # Include potential parsing warnings
+                                     metadata=error_metadata)
 
         # --- CHUNKING LOGIC ---
+        # Use character-based chunking
+        def split_text_into_chunks(text, chunk_size):
+            chunks = []
+            current_chunk = ""
+            # Split by double newline (paragraphs) first
+            paragraphs = re.split(r'(\n\s*\n)', text) # Keep separators
+            
+            for i in range(0, len(paragraphs), 2): # Iterate over text + separator
+                paragraph = paragraphs[i]
+                separator = paragraphs[i+1] if i+1 < len(paragraphs) else ""
+                
+                # If adding the next paragraph fits, add it
+                if len(current_chunk) + len(paragraph) + len(separator) <= chunk_size:
+                    current_chunk += paragraph + separator
+                # If the paragraph *itself* is too large, split it
+                elif len(paragraph) > chunk_size:
+                    # If we have something, save it first
+                    if current_chunk.strip():
+                        chunks.append(current_chunk.strip())
+                    current_chunk = ""
+                    # Force-split the large paragraph
+                    for j in range(0, len(paragraph), chunk_size):
+                         chunks.append(paragraph[j:j+chunk_size])
+                    current_chunk += separator # Add separator to next (empty) chunk
+                # Otherwise, the paragraph doesn't fit, so save the current chunk and start a new one
+                else:
+                    if current_chunk.strip():
+                         chunks.append(current_chunk.strip())
+                    current_chunk = paragraph + separator
+            
+            # Add the last remaining chunk
+            if current_chunk.strip():
+                 chunks.append(current_chunk.strip())
+                 
+            logger.info(f"Split text into {len(chunks)} smart chunks based on paragraphs (max size {chunk_size} chars).")
+            return chunks
+
         if len(text_content) <= TEXT_CHUNK_SIZE:
-            # Text is small enough, process as a single call
             logger.info("Text is small enough, processing as single chunk.")
-            return await self.extract_from_text(
+            # Still apply thresholding at the end
+            result = await self.extract_from_text(
                 text=text_content,
                 source_lang=source_lang,
                 target_lang=target_lang,
                 domain_path=domain_path,
-                relevance_threshold=relevance_threshold,
+                relevance_threshold=-1, # Don't filter yet
             )
+            # Now apply filter
+            threshold_to_apply = relevance_threshold if relevance_threshold is not None else self.default_relevance_threshold
+            if threshold_to_apply >= 0:
+                 final_result = result.filter_by_relevance(threshold_to_apply)
+                 logger.info(f"Returning {len(final_result.terms)} terms after applying threshold >= {threshold_to_apply:.1f} (Initial: {len(result.terms)})")
+                 final_result.statistics = final_result._calculate_statistics(final_result.terms)
+                 final_result.metadata = result.metadata
+                 return final_result
+            else:
+                 logger.info(f"Returning {len(result.terms)} terms (no threshold filter).")
+                 return result
         else:
-            # Text is large, split into chunks
-            logger.info(f"Text is large ({len(text_content)} chars), splitting into {len(text_content) // TEXT_CHUNK_SIZE + 1} chunks...")
-            
-            # Simple character-based chunking
-            chunks = [text_content[i:i+TEXT_CHUNK_SIZE] for i in range(0, len(text_content), TEXT_CHUNK_SIZE)]
+            # Text is large, split into chunks respecting paragraphs
+            logger.info(f"Text is large ({len(text_content)} chars), splitting into chunks...")
+            chunks = split_text_into_chunks(text_content, TEXT_CHUNK_SIZE)
             logger.info(f"Processing {len(chunks)} chunks in parallel (using asyncio.gather).")
 
             tasks = []
@@ -239,15 +287,13 @@ class TermExtractor:
                         source_lang=source_lang,
                         target_lang=target_lang,
                         domain_path=domain_path,
-                        context=chunk_context, # Pass chunk info as context
+                        context=chunk_context,
                         relevance_threshold=-1 # IMPORTANT: Disable filtering until after merge
                     )
                 )
             
-            # Run tasks concurrently
             results_list = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Filter out exceptions and log them
             valid_results: List[ExtractionResult] = []
             for i, res in enumerate(results_list):
                 if isinstance(res, ExtractionResult):
@@ -260,8 +306,6 @@ class TermExtractor:
                     logger.error(f"Chunk {i+1} returned unknown type: {type(res)}")
             
             logger.info(f"Merging results from {len(valid_results)} successful chunks.")
-            
-            # Merge all valid results
             merged_result = await self.merge_results(valid_results, deduplicate=True)
             
             # Apply the final threshold filter *after* merging
@@ -269,7 +313,6 @@ class TermExtractor:
             if threshold_to_apply >= 0:
                  final_filtered_result = merged_result.filter_by_relevance(threshold_to_apply)
                  logger.info(f"Returning {len(final_filtered_result.terms)} terms after merging and applying threshold >= {threshold_to_apply:.1f} (Total unique terms: {len(merged_result.terms)})")
-                 # Recalculate stats on the final filtered list
                  final_filtered_result.statistics = final_filtered_result._calculate_statistics(final_filtered_result.terms)
                  final_filtered_result.metadata["total_chunks"] = len(chunks)
                  final_filtered_result.metadata["successful_chunks"] = len(valid_results)
@@ -278,7 +321,6 @@ class TermExtractor:
                  logger.info(f"Returning {len(merged_result.terms)} merged terms (no threshold filter applied).")
                  merged_result.metadata["total_chunks"] = len(chunks)
                  merged_result.metadata["successful_chunks"] = len(valid_results)
-                 # Stats should have been calculated by merge_results
                  return merged_result
 
 
@@ -334,36 +376,36 @@ class TermExtractor:
          if not texts: return []
          logger.info(f"Starting batch extraction for {len(texts)} texts with batch size {batch_size}.")
 
-         task_id = "batch_extraction_list" # Different ID from file chunking
+         task_id = "batch_extraction_list"
          if show_progress and self.progress_tracker:
              self.progress_tracker.create_task(task_id, "Batch Text Extraction", len(texts))
              self.progress_tracker.start_task(task_id)
 
          results: List[ExtractionResult] = []
-         # This uses chunk_list helper to group texts, not characters
-         text_chunks_for_batching = chunk_list(texts, batch_size)
+         text_chunks_for_batching = chunk_list(texts, batch_size) # Groups texts
          processed_count = 0
 
          for batch_idx, batch_of_texts in enumerate(text_chunks_for_batching):
              logger.info(f"Processing batch {batch_idx+1}/{len(text_chunks_for_batching)}...")
-             batch_tasks = [
-                 # Check length of each text item before calling extract_from_file logic
-                 # This assumes extract_from_text handles chunking if a *single text item* is too large
-                 # Let's refine: extract_batch should call extract_from_text directly
-                 # OR, we assume extract_from_file's chunking logic is desired for each text item
-                 
-                 # Simpler: Assume each item in 'texts' should be processed individually
-                 # The 'batch_size' here controls asyncio.gather size
-                 self.extract_from_text( # Call extract_from_text directly
-                     text=text,
-                     source_lang=source_lang,
-                     target_lang=target_lang,
-                     domain_path=domain_path,
-                     relevance_threshold=relevance_threshold # Pass threshold
-                 ) for text in batch_of_texts if text.strip() # Skip empty texts
-             ]
-             
-             if not batch_tasks: continue # Skip if batch was empty
+             batch_tasks = []
+             for text in batch_of_texts:
+                 if text and text.strip():
+                      # Each text item is processed as a "file" (which handles chunking)
+                      batch_tasks.append(
+                           self.extract_from_text( # Call extract_from_text directly
+                                text=text,
+                                source_lang=source_lang,
+                                target_lang=target_lang,
+                                domain_path=domain_path,
+                                relevance_threshold=relevance_threshold # Pass threshold
+                           )
+                      )
+                 else:
+                      processed_count += 1 # Count empty texts as "processed"
+                      results.append(ExtractionResult(terms=[], metadata={"warning": "Empty text provided."}))
+
+
+             if not batch_tasks: continue
 
              batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
@@ -398,29 +440,27 @@ class TermExtractor:
 
         all_terms: List[Term] = []
         merged_metadata = {"merged_from": len(results), "deduplicated": deduplicate, "errors": [], "warnings": []}
-        base_result = results[0] # Use first result for base info
-        final_domain_hierarchy = base_result.domain_hierarchy # Default
-        
-        # Try to find the most common or first non-General domain
+        base_result = results[0]
+        final_domain_hierarchy = base_result.domain_hierarchy
+
         domain_counts = {}
-        for res in results:
-             if res.domain_hierarchy and tuple(res.domain_hierarchy) != ("General",):
-                  domain_key = tuple(res.domain_hierarchy)
-                  domain_counts[domain_key] = domain_counts.get(domain_key, 0) + 1
-        if domain_counts:
-             final_domain_hierarchy = list(max(domain_counts, key=domain_counts.get))
-
-
         for i, result in enumerate(results):
              if isinstance(result, ExtractionResult):
                   all_terms.extend(result.terms)
-                  if "error" in result.metadata:
-                       merged_metadata["errors"].append(f"Chunk/Item {i+1}: {result.metadata['error']}")
-                  if "warning" in result.metadata:
-                       merged_metadata["warnings"].append(f"Chunk/Item {i+1}: {result.metadata['warning']}")
+                  if "error" in result.metadata: merged_metadata["errors"].append(f"Chunk/Item {i+1}: {result.metadata['error']}")
+                  if "warning" in result.metadata: merged_metadata["warnings"].append(f"Chunk/Item {i+1}: {result.metadata['warning']}")
+                  # Domain voting
+                  if result.domain_hierarchy and tuple(result.domain_hierarchy) != ("General",):
+                       domain_key = tuple(result.domain_hierarchy)
+                       domain_counts[domain_key] = domain_counts.get(domain_key, 0) + 1
              else:
                   logger.warning(f"Item {i} in results list is not an ExtractionResult: {type(result)}")
                   merged_metadata["errors"].append(f"Result {i}: Invalid type {type(result)}")
+        
+        if domain_counts: # Find most common valid domain
+             final_domain_hierarchy = list(max(domain_counts, key=domain_counts.get))
+        elif not final_domain_hierarchy or final_domain_hierarchy == ["General"]: # Fallback if first was "General"
+             final_domain_hierarchy = ["General"]
 
 
         final_terms = all_terms
@@ -429,6 +469,7 @@ class TermExtractor:
         if deduplicate:
             logger.info(f"Deduplicating {len(all_terms)} total terms...")
             for term in all_terms:
+                # Key for deduplication: lowercase term, translation, and POS
                 key = (term.term.lower(), term.translation.lower() if term.translation else None, term.pos)
                 
                 if key not in deduplication_map:
@@ -436,19 +477,16 @@ class TermExtractor:
                 else:
                     # --- Merge Logic ---
                     existing_term = deduplication_map[key]
-                    # Combine frequency
                     existing_term.frequency += term.frequency
-                    # Keep highest relevance/confidence score
                     existing_term.relevance_score = max(existing_term.relevance_score, term.relevance_score)
                     existing_term.confidence_score = max(existing_term.confidence_score, term.confidence_score)
-                    # Merge variants and related terms (simple set merge)
                     existing_term.variants = list(set(existing_term.variants + term.variants))
                     existing_term.related_terms = list(set(existing_term.related_terms + term.related_terms))
-                    # Keep definition/context from highest relevance score?
+                    # Keep metadata from the term with the highest relevance
                     if term.relevance_score > existing_term.relevance_score:
                          existing_term.definition = term.definition
                          existing_term.context = term.context
-                         existing_term.domain = term.domain # Take domain from higher-scored term
+                         existing_term.domain = term.domain
                          existing_term.subdomain = term.subdomain
 
             final_terms = list(deduplication_map.values())
@@ -456,18 +494,15 @@ class TermExtractor:
         else:
             logger.info(f"Merged {len(all_terms)} terms without deduplication.")
 
-
-        # Create the final merged result
         merged_result = ExtractionResult(
             terms=final_terms,
-            domain_hierarchy=final_domain_hierarchy, # Use determined domain
+            domain_hierarchy=final_domain_hierarchy,
             language_pair=base_result.language_pair,
             source_language=base_result.source_language,
             target_language=base_result.target_language,
             metadata=merged_metadata,
-            # Statistics will be recalculated by __post_init__ or explicitly
         )
-        # Explicitly recalculate stats for the final merged list
+        # Recalculate stats on the final merged & deduplicated list
         merged_result.statistics = merged_result._calculate_statistics(final_terms)
 
         return merged_result
