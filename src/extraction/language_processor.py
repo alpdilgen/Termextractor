@@ -26,7 +26,7 @@ class LanguageFeatures:
     has_compounds: bool = False      # Bitişik kelime yapma eğilimi (örn: Almanca)
     is_agglutinative: bool = False   # Eklemeli dil (örn: Türkçe, Fince)
     is_rtl: bool = False             # Sağdan sola yazım (örn: Arapça)
-    script: str = "Latin"            # Kullanılan alfabe (Latin, Cyrillic, Greek, etc.)
+    script: str = "Latin"            # Kullanılan alfabe (Latin, Cyrillillic, Greek, etc.)
     typical_word_length: int = 5     # (Bu özellik şu an aktif kullanılmıyor)
 
 
@@ -66,7 +66,7 @@ class LanguageProcessor:
             "lt": LanguageFeatures(has_compounds=False, script="Latin"),     # Litvanca (EU)
             "lv": LanguageFeatures(has_compounds=False, script="Latin"),     # Letonca (EU)
             "mt": LanguageFeatures(is_agglutinative=True, script="Latin"),   # Maltaca (EU)
-            "sk": LanguageFeatures(has_compounds=False, script="Latin"),     # Slovakça (EU)
+            "sk": LanguageFeatures(has_compounds=False, script="Latin"),     # Slovakça (EU) <-- DÜZELTME: EKLENDİ
             "sl": LanguageFeatures(has_compounds=False, script="Latin"),     # Slovence (EU)
 
             # Mevcut Diğer Diller (EU Dışı)
@@ -241,6 +241,7 @@ class LanguageProcessor:
             "fr": {"le", "la", "les", "un", "une", "et", "ou", "dans", "sur"},
             "es": {"el", "la", "los", "las", "un", "una", "y", "o", "en"},
             "tr": {"ve", "ile", "bir", "bu", "o", "ama", "için", "mi"},
+            "sk": {"a", "s", "v", "z", "do", "na", "o", "po", "pri"}, # Slovakça için birkaç örnek eklendi
         }
         word_lower = word.lower()
         lang_stopwords = stopwords.get(language_code, set())
