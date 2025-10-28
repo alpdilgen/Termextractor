@@ -12,7 +12,7 @@ class AnthropicModel(str, Enum):
     CLAUDE_3_5_HAIKU = "claude-3-5-haiku-20241022"
     CLAUDE_3_OPUS = "claude-3-opus-20240229"
     CLAUDE_3_HAIKU = "claude-3-haiku-20240307"
-    CLAUDE_3_7_SONNET = "claude-3-7-sonnet-20250219"
+    CLAUDE_3_7_SONNET = "claude-3-7-sonnet-20250219" # Örnek gelecek model
 
 
 ANTHROPIC_MODELS: List[str] = [model.value for model in AnthropicModel]
@@ -20,28 +20,43 @@ ANTHROPIC_MODELS: List[str] = [model.value for model in AnthropicModel]
 DEFAULT_MODEL = AnthropicModel.CLAUDE_3_5_SONNET.value
 
 
-# Supported Languages
+# --- GÜNCELLENMİŞ DESTEKLENEN DİLLER SÖZLÜĞÜ ---
+# Streamlit arayüzündeki açılır listeyi bu sözlük kontrol eder.
 SUPPORTED_LANGUAGES: Dict[str, str] = {
-    "en": "English",
-    "bg": "Bulgarian",
-    "ro": "Romanian",
-    "tr": "Turkish",
-    "de": "German",
-    "fr": "French",
-    "es": "Spanish",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "ru": "Russian",
-    "ar": "Arabic",
-    "he": "Hebrew",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "nl": "Dutch",
-    "pl": "Polish",
-    "cs": "Czech",
-    "sv": "Swedish",
-    "da": "Danish",
+    # Resmi AB Dilleri (24)
+    "bg": "Bulgarca",
+    "cs": "Çekçe",
+    "da": "Danca",
+    "de": "Almanca",
+    "el": "Yunanca",
+    "en": "İngilizce",
+    "es": "İspanyolca",
+    "et": "Estonca",
+    "fi": "Fince",
+    "fr": "Fransızca",
+    "ga": "İrlandaca",
+    "hr": "Hırvatça",
+    "hu": "Macarca",
+    "it": "İtalyanca",
+    "lt": "Litvanca",
+    "lv": "Letonca",
+    "mt": "Maltaca",
+    "nl": "Hollandaca",
+    "pl": "Lehçe",
+    "pt": "Portekizce",
+    "ro": "Rumence",
+    "sk": "Slovakça", # EKLENDİ
+    "sl": "Slovence",
+    "sv": "İsveççe",
+
+    # Diğer Önemli Diller (Listeyi genişletebilirsiniz)
+    "tr": "Türkçe",
+    "ru": "Rusça",
+    "ar": "Arapça",
+    "he": "İbranice",
+    "zh": "Çince",
+    "ja": "Japonca",
+    "ko": "Korece",
 }
 
 
@@ -86,7 +101,6 @@ FILE_FORMATS: Dict[str, List[str]] = {
 # Export Formats
 class ExportFormat(str, Enum):
     """Supported export formats."""
-
     TBX = "tbx"
     XLSX = "xlsx"
     CSV = "csv"
@@ -97,72 +111,33 @@ class ExportFormat(str, Enum):
 # Processing Modes
 class ProcessingMode(str, Enum):
     """Processing modes for term extraction."""
-
-    FAST = "fast"  # Approximate, faster processing
-    BALANCED = "balanced"  # Balance between speed and quality
-    DETAILED = "detailed"  # Thorough, slower processing
+    FAST = "fast"
+    BALANCED = "balanced"
+    DETAILED = "detailed"
 
 
 # Quality Tiers
 class QualityTier(str, Enum):
     """Quality tiers for extracted terms."""
-
-    HIGH = "high"  # 80+ relevance score
-    MEDIUM = "medium"  # 60-79 relevance score
-    LOW = "low"  # <60 relevance score
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 # Domain Categories (examples, can be extended)
 DOMAIN_CATEGORIES: Dict[str, List[str]] = {
-    "Medical": [
-        "Healthcare",
-        "Veterinary Medicine",
-        "Dentistry",
-        "Pharmacy",
-        "Biotechnology",
-    ],
-    "Technology": [
-        "Software Development",
-        "Hardware Engineering",
-        "AI/Machine Learning",
-        "Cybersecurity",
-        "Telecommunications",
-    ],
-    "Legal": [
-        "Contract Law",
-        "Intellectual Property",
-        "Corporate Law",
-        "Criminal Law",
-        "International Law",
-    ],
-    "Finance": [
-        "Banking",
-        "Investment",
-        "Insurance",
-        "Accounting",
-        "Cryptocurrency",
-    ],
-    "Engineering": [
-        "Mechanical Engineering",
-        "Civil Engineering",
-        "Electrical Engineering",
-        "Chemical Engineering",
-        "Aerospace Engineering",
-    ],
-    "Science": [
-        "Physics",
-        "Chemistry",
-        "Biology",
-        "Environmental Science",
-        "Astronomy",
-    ],
+    "Medical": ["Healthcare", "Veterinary Medicine", "Dentistry", "Pharmacy", "Biotechnology"],
+    "Technology": ["Software Development", "Hardware Engineering", "AI/Machine Learning", "Cybersecurity", "Telecommunications"],
+    "Legal": ["Contract Law", "Intellectual Property", "Corporate Law", "Criminal Law", "International Law"],
+    "Finance": ["Banking", "Investment", "Insurance", "Accounting", "Cryptocurrency"],
+    "Engineering": ["Mechanical Engineering", "Civil Engineering", "Electrical Engineering", "Chemical Engineering", "Aerospace Engineering"],
+    "Science": ["Physics", "Chemistry", "Biology", "Environmental Science", "Astronomy"],
 }
 
 
 # Metadata Categories
 class MetadataCategory(str, Enum):
     """Metadata categories for term enrichment."""
-
     STATISTICAL = "statistical"
     LINGUISTIC = "linguistic"
     SEMANTIC = "semantic"
@@ -178,30 +153,18 @@ class MetadataCategory(str, Enum):
 
 # Part of Speech Tags
 POS_TAGS: List[str] = [
-    "NOUN",
-    "VERB",
-    "ADJ",
-    "ADV",
-    "PROPN",
-    "PRON",
-    "DET",
-    "ADP",
-    "NUM",
-    "CONJ",
-    "PART",
-    "PUNCT",
-    "SYM",
-    "X",
+    "NOUN", "VERB", "ADJ", "ADV", "PROPN", "PRON", "DET", "ADP",
+    "NUM", "CONJ", "PART", "PUNCT", "SYM", "X", "PHRASE", "UNKNOWN" # Eklendi
 ]
 
 
 # API Configuration
-API_TIMEOUT = 300  # 5 minutes
+API_TIMEOUT = 300 # 5 minutes
 MAX_RETRIES = 4
-RETRY_BACKOFF_FACTOR = 2  # Exponential backoff: 2s, 4s, 8s, 16s
+RETRY_BACKOFF_FACTOR = 2
 
 
-# Token Limits (approximate)
+# Token Limits (approximate context window size)
 TOKEN_LIMITS: Dict[str, int] = {
     AnthropicModel.CLAUDE_3_5_SONNET.value: 200000,
     AnthropicModel.CLAUDE_3_5_HAIKU.value: 200000,
@@ -211,13 +174,13 @@ TOKEN_LIMITS: Dict[str, int] = {
 }
 
 
-# Cost per 1K tokens (approximate, update as needed)
+# Cost per 1K tokens (Update as pricing changes)
 COST_PER_1K_TOKENS: Dict[str, Dict[str, float]] = {
     AnthropicModel.CLAUDE_3_5_SONNET.value: {"input": 0.003, "output": 0.015},
-    AnthropicModel.CLAUDE_3_5_HAIKU.value: {"input": 0.0008, "output": 0.004},
+    AnthropicModel.CLAUDE_3_5_HAIKU.value: {"input": 0.00025, "output": 0.00125}, # Düzeltilmiş Haiku 3.5 fiyatı (tahmini)
     AnthropicModel.CLAUDE_3_OPUS.value: {"input": 0.015, "output": 0.075},
-    AnthropicModel.CLAUDE_3_HAIKU.value: {"input": 0.00025, "output": 0.00125},
-    AnthropicModel.CLAUDE_3_7_SONNET.value: {"input": 0.003, "output": 0.015},
+    AnthropicModel.CLAUDE_3_HAIKU.value: {"input": 0.00025, "output": 0.00125}, # Haiku 3.0
+    AnthropicModel.CLAUDE_3_7_SONNET.value: {"input": 0.003, "output": 0.015}, # Gelecek model için Sonnet 3.5 fiyatı varsayıldı
 }
 
 
@@ -231,13 +194,13 @@ DEFAULT_CACHE_TTL_HOURS = 24
 
 # Regular expressions for term extraction
 TERM_PATTERNS = {
-    "compound": r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b",  # CamelCase compounds
-    "abbreviation": r"\b[A-Z]{2,}\b",  # All caps abbreviations
-    "hyphenated": r"\b[a-zA-Z]+-[a-zA-Z]+(?:-[a-zA-Z]+)*\b",  # Hyphenated terms
+    "compound": r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b",
+    "abbreviation": r"\b[A-Z]{2,}\b",
+    "hyphenated": r"\b[a-zA-Z]+-[a-zA-Z]+(?:-[a-zA-Z]+)*\b",
 }
 
 
 # Security
-ENCRYPTION_ALGORITHM = "AES-256-GCM"
+ENCRYPTION_ALGORITHM = "AES-128-CBC" # Fernet'in kullandığı
 DEFAULT_DATA_RETENTION_DAYS = 7
 AUDIT_LOG_RETENTION_DAYS = 90
