@@ -3,7 +3,8 @@
 """Language-specific processing utilities."""
 
 import re
-from typing import Dict, List, Optional, Set, Tuple
+# DÜZELTME: 'Any' buraya eklendi
+from typing import Any, Dict, List, Optional, Set, Tuple 
 from dataclasses import dataclass
 from loguru import logger
 import unicodedata # normalize_diacritics ve detect_script için
@@ -117,18 +118,19 @@ class LanguageProcessor:
         self,
         word: str,
         language_code: str,
-    ) -> Dict[str, Any]:
+    ) -> Dict[str, Any]: # 'Any' tipini kullanabilmek için import edildi
         """
         Bir kelimenin morfolojisini (yapısını) analiz eder.
         """
         features = self.get_features(language_code)
-        analysis = {
+        analysis: Dict[str, Any] = {
             "word": word,
             "language": language_code,
             "length": len(word),
             "is_compound": False,
             "is_agglutinative": features.is_agglutinative,
             "script": features.script,
+            "estimated_parts": None # None olarak başlat
         }
 
         # Basit bitişik kelime tespiti
